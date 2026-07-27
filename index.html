@@ -23,10 +23,13 @@
     font-family:'Quicksand', sans-serif;
     overflow:hidden;
     touch-action: manipulation;
+    -webkit-user-select:none;
+    user-select:none;
   }
   #stage{
     position:relative;
     width:100%;
+    height:100vh;
     height:100dvh;
     display:flex;
     flex-direction:column;
@@ -50,19 +53,11 @@
     color:var(--wine-deep);
     font-size:clamp(30px, 8vw, 46px);
     text-align:center;
-    margin:0 0 10vh 0;
+    margin:0 0 8vh 0;
     letter-spacing:0.3px;
     line-height:1.25;
-    transition:opacity 0.4s ease;
-  }
-  #btn-row{
-    position:relative;
-    width:100%;
-    max-width:420px;
-    height:180px;
   }
   button{
-    position:absolute;
     border:none;
     border-radius:999px;
     font-family:'Quicksand', sans-serif;
@@ -70,38 +65,52 @@
     cursor:pointer;
     -webkit-user-select:none;
     user-select:none;
+    touch-action: manipulation;
   }
   #yes{
-    left:50%;
-    top:100px;
-    transform:translate(-50%,-50%) scale(1);
+    position:relative;
     background:var(--wine);
     color:var(--cream);
     padding:18px 44px;
     font-size:20px;
     box-shadow:0 8px 24px rgba(91,26,53,0.35);
-    transition:transform 0.35s cubic-bezier(.34,1.56,.64,1), box-shadow 0.35s ease, background 0.35s ease;
+    transition:transform 0.35s cubic-bezier(.34,1.56,.64,1), box-shadow 0.35s ease;
+    transform-origin:center;
     z-index:2;
   }
   #no{
+    position:fixed;
     left:50%;
-    top:0px;
+    top:64%;
     transform:translate(-50%,-50%);
     background:transparent;
     color:var(--wine);
     border:1.5px solid var(--rose);
     padding:16px 38px;
     font-size:18px;
-    transition:top 0.28s ease, left 0.28s ease;
-    z-index:1;
+    transition:left 0.25s ease, top 0.25s ease, opacity 0.5s ease;
+    z-index:3;
+  }
+  #credit{
+    position:fixed;
+    top:14px;
+    left:16px;
+    font-size:11px;
+    color:var(--wine);
+    opacity:0.35;
+    letter-spacing:0.2px;
+    z-index:4;
   }
   #hint{
-    margin-top:8vh;
+    position:absolute;
+    bottom:6vh;
+    left:0; right:0;
     font-size:13px;
     color:var(--wine);
     opacity:0.45;
     text-align:center;
     letter-spacing:0.5px;
+    padding:0 8vw;
   }
 
   #celebration{
@@ -157,16 +166,16 @@
 </head>
 <body>
 
+<div id="credit">All rights reserved to Idan</div>
+
 <div id="stage">
   <div class="vine-line vine-top"></div>
   <div class="vine-line vine-bottom"></div>
 
   <p id="question">Do you love me?</p>
 
-  <div id="btn-row">
-    <button id="yes">yes</button>
-    <button id="no">no</button>
-  </div>
+  <button id="yes" type="button">yes</button>
+  <button id="no" type="button">no</button>
 
   <p id="hint">go on, try the other one</p>
 </div>
@@ -178,51 +187,85 @@
 
 <script>
 (function(){
-  const stage = document.getElementById('stage');
-  const row = document.getElementById('btn-row');
   const noBtn = document.getElementById('no');
   const yesBtn = document.getElementById('yes');
   const hint = document.getElementById('hint');
   const celebration = document.getElementById('celebration');
+
+  const MAX_DODGES = 30;
   let dodges = 0;
+  let removed = false;
+  let lastTrigger = 0;
 
-  function moveNo(){
-    const rowRect = row.getBoundingClientRect();
-    const btnRect = noBtn.getBoundingClientRect();
-    const margin = 8;
-    const maxLeft = Math.max(rowRect.width - btnRect.width - margin, margin);
-    const maxTop = Math.max(rowRect.height - btnRect.height - margin, margin);
-    const newLeft = margin + Math.random() * (maxLeft - margin) + btnRect.width/2;
-    const newTop = margin + Math.random() * (maxTop - margin) + btnRect.height/2;
-    noBtn.style.left = newLeft + 'px';
-    noBtn.style.top = newTop + 'px';
+  function pickPosition(){
+    const margin = 24;
+    const w = noBtn.offsetWidth;
+    const h = noBtn.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const yesRect = yesBtn.getBoundingClientRect();
+    const yesCX = yesRect.left + yesRect.width / 2;
+    const yesCY = yesRect.top + yesRect.height / 2;
 
-    dodges++;
-    const growth = Math.min(1 + dodges * 0.06, 1.55);
-    yesBtn.style.transform = 'translate(-50%,-50%) scale(' + growth + ')';
+    const minDist = Math.max(vw, vh) * 0.42;
 
-    if(dodges === 2){ hint.textContent = "it's okay, yes is right there"; }
-    if(dodges === 5){ hint.textContent = "you can stop trying, i'll wait"; }
-    if(dodges >= 9){ hint.textContent = "..."; }
+    let x, y, tries = 0;
+    let best = null, bestDist = -1;
+    do {
+      x = margin + w / 2 + Math.random() * (vw - w - margin * 2);
+      y = margin + h / 2 + Math.random() * (vh - h - margin * 2);
+      const d = Math.hypot(x - yesCX, y - yesCY);
+      if (d > bestDist) { bestDist = d; best = { x, y }; }
+      tries++;
+    } while (bestDist < minDist && tries < 25);
+
+    return best;
   }
 
-  ['pointerenter','pointerdown','touchstart','click'].forEach(evt=>{
-    noBtn.addEventListener(evt, function(e){
-      e.preventDefault();
-      moveNo();
-    }, {passive:false});
-  });
+  function moveNo(){
+    if (removed) return;
+    const pos = pickPosition();
+    noBtn.style.left = pos.x + 'px';
+    noBtn.style.top = pos.y + 'px';
+
+    dodges++;
+    const growth = Math.min(1 + dodges * 0.045, 1.9);
+    yesBtn.style.transform = 'scale(' + growth.toFixed(2) + ')';
+
+    if (dodges === 3) hint.textContent = "it's okay, yes is right there";
+    else if (dodges === 10) hint.textContent = "you can stop trying, i'll wait";
+    else if (dodges === 20) hint.textContent = "almost out of moves...";
+    else if (dodges >= MAX_DODGES) {
+      removed = true;
+      hint.textContent = "looks like it's just yes now";
+      noBtn.style.opacity = '0';
+      noBtn.style.transform += ' scale(0.6)';
+      setTimeout(function(){ noBtn.style.display = 'none'; }, 500);
+    }
+  }
+
+  function handleTrigger(e){
+    e.preventDefault();
+    const now = Date.now();
+    if (now - lastTrigger < 300) return;
+    lastTrigger = now;
+    moveNo();
+  }
+
+  noBtn.addEventListener('pointerdown', handleTrigger, {passive:false});
+  noBtn.addEventListener('touchstart', handleTrigger, {passive:false});
+  noBtn.addEventListener('click', handleTrigger, {passive:false});
 
   function launchPetals(){
-    const colors = ['&#9825;','&#10022;'];
-    for(let i=0;i<26;i++){
+    const symbols = ['&#9825;','&#10022;'];
+    for (let i = 0; i < 26; i++){
       const p = document.createElement('div');
       p.className = 'petal';
-      p.innerHTML = colors[Math.random() < 0.7 ? 0 : 1];
-      p.style.left = Math.random()*100 + 'vw';
-      p.style.animationDuration = (3 + Math.random()*2.5) + 's';
-      p.style.animationDelay = (Math.random()*1.2) + 's';
-      p.style.fontSize = (14 + Math.random()*18) + 'px';
+      p.innerHTML = symbols[Math.random() < 0.7 ? 0 : 1];
+      p.style.left = Math.random() * 100 + 'vw';
+      p.style.animationDuration = (3 + Math.random() * 2.5) + 's';
+      p.style.animationDelay = (Math.random() * 1.2) + 's';
+      p.style.fontSize = (14 + Math.random() * 18) + 'px';
       celebration.appendChild(p);
     }
   }
